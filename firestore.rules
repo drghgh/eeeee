@@ -1,0 +1,258 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ====================
+    // Helper Functions
+    // ====================
+    
+    // التحقق من أن المستخدم مسجل دخول
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // التحقق من أن المستخدم هو صاحب المورد
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // التحقق من أن المستخدم مدير
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // التحقق من أن المستخدم مدير أو صاحب المورد
+    function isAdminOrOwner(userId) {
+      return isAdmin() || isOwner(userId);
+    }
+    
+    // التحقق من صحة البريد الإلكتروني
+    function isValidEmail(email) {
+      return email.matches('.*@.*\\..*');
+    }
+    
+    // التحقق من أن البيانات المطلوبة موجودة
+    function hasRequiredFields(fields) {
+      return fields.diff(resource.data.keys()).size() == 0;
+    }
+    
+    // ====================
+    // Users Collection
+    // ====================
+    match /users/{userId} {
+      // قراءة: المستخدم نفسه أو المدير
+      allow read: if isAdminOrOwner(userId);
+      
+      // إنشاء: المستخدم نفسه فقط مع البيانات الصحيحة
+      allow create: if isOwner(userId) && 
+                       isValidEmail(resource.data.email) &&
+                       hasRequiredFields(['email', 'displayName', 'createdAt']);
+      
+      // تحديث: المستخدم نفسه أو المدير
+      allow update: if isAdminOrOwner(userId) && 
+                       // منع تغيير البيانات الحساسة
+                       !('role' in resource.data.diff(request.resource.data).affectedKeys()) ||
+                       isAdmin();
+      
+      // حذف: المدير فقط
+      allow delete: if isAdmin();
+    }
+    
+    // ====================
+    // Admins Collection
+    // ====================
+    match /admins/{adminId} {
+      // قراءة: المدراء فقط
+      allow read: if isAdmin();
+      
+      // إنشاء/تحديث/حذف: المدير الرئيسي فقط
+      allow write: if isAdmin() && 
+                      exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
+    }
+    
+    // ====================
+    // Orders Collection
+    // ====================
+    match /orders/{orderId} {
+      // قراءة: صاحب الطلب أو المدير
+      allow read: if isAdmin() || isOwner(resource.data.userId);
+      
+      // إنشاء: المستخدم المسجل فقط
+      allow create: if isAuthenticated() && 
+                       isOwner(resource.data.userId) &&
+                       hasRequiredFields(['userId', 'items', 'totalAmount', 'status', 'createdAt']);
+      
+      // تحديث: المدير فقط (لتغيير حالة الطلب)
+      allow update: if isAdmin();
+      
+      // حذف: المدير فقط
+      allow delete: if isAdmin();
+    }
+    
+    // ====================
+    // Support Tickets Collection
+    // ====================
+    match /support_tickets/{ticketId} {
+      // قراءة: صاحب التذكرة أو المدير
+      allow read: if isAdmin() || isOwner(resource.data.userId);
+      
+      // إنشاء: المستخدم المسجل فقط
+      allow create: if isAuthenticated() && 
+                       isOwner(resource.data.userId) &&
+                       hasRequiredFields(['userId', 'subject', 'message', 'priority', 'status', 'createdAt']);
+      
+      // تحديث: صاحب التذكرة (للرد) أو المدير (لإدارة التذكرة)
+      allow update: if (isOwner(resource.data.userId) && 
+                          // المستخدم يمكنه فقط إضافة ردود
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replies', 'lastUpdated', 'status'])) ||
+                       isAdmin();
+      
+      // حذف: المدير فقط
+      allow delete: if isAdmin();
+    }
+    
+    // ====================
+    // Products Collection
+    // ====================
+    match /products/{productId} {
+      // قراءة: الجميع (للمنتجات النشطة) أو المدير (لجميع المنتجات)
+      allow read: if resource.data.isActive == true || isAdmin();
+      
+      // إنشاء/تحديث/حذف: المدير فقط
+      allow create: if isAdmin() && 
+                       hasRequiredFields(['name', 'description', 'price', 'category', 'isActive', 'createdAt', 'createdBy']);
+      
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ====================
+    // FAQ Collection
+    // ====================
+    match /faqs/{faqId} {
+      // قراءة: الجميع
+      allow read: if true;
+      
+      // إنشاء/تحديث/حذف: المدير فقط
+      allow write: if isAdmin();
+    }
+    
+    // ====================
+    // Posts Collection
+    // ====================
+    match /posts/{postId} {
+      // قراءة: الجميع (للمنشورات المنشورة) أو المدير
+      allow read: if resource.data.status == 'published' || isAdmin();
+      
+      // إنشاء/تحديث/حذف: المدير فقط
+      allow write: if isAdmin();
+    }
+    
+    // ====================
+    // Systems Collection (للأنظمة والخدمات)
+    // ====================
+    match /systems/{systemId} {
+      // قراءة: الجميع (للأنظمة النشطة) أو المدير
+      allow read: if resource.data.isActive == true || isAdmin();
+      
+      // إنشاء/تحديث/حذف: المدير فقط
+      allow write: if isAdmin();
+    }
+    
+    // ====================
+    // Social Media Links Collection
+    // ====================
+    match /social_media/{linkId} {
+      // قراءة: الجميع
+      allow read: if true;
+      
+      // إنشاء/تحديث/حذف: المدير فقط
+      allow write: if isAdmin();
+    }
+    
+    // ====================
+    // Settings Collection
+    // ====================
+    match /settings/{settingId} {
+      // قراءة: الجميع (للإعدادات العامة) أو المدير
+      allow read: if resource.data.isPublic == true || isAdmin();
+      
+      // إنشاء/تحديث/حذف: المدير فقط
+      allow write: if isAdmin();
+    }
+    
+    // ====================
+    // Analytics Collection
+    // ====================
+    match /analytics/{analyticsId} {
+      // قراءة/كتابة: المدير فقط
+      allow read, write: if isAdmin();
+    }
+    
+    // ====================
+    // Notifications Collection
+    // ====================
+    match /notifications/{notificationId} {
+      // قراءة: صاحب الإشعار أو المدير
+      allow read: if isAdmin() || isOwner(resource.data.userId);
+      
+      // إنشاء: النظام أو المدير
+      allow create: if isAdmin();
+      
+      // تحديث: صاحب الإشعار (لتعليم كمقروء) أو المدير
+      allow update: if (isOwner(resource.data.userId) && 
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt'])) ||
+                       isAdmin();
+      
+      // حذف: المدير فقط
+      allow delete: if isAdmin();
+    }
+    
+    // ====================
+    // User Profiles Collection
+    // ====================
+    match /user_profiles/{userId} {
+      // قراءة: صاحب الملف الشخصي أو المدير
+      allow read: if isAdminOrOwner(userId);
+      
+      // إنشاء/تحديث: صاحب الملف الشخصي أو المدير
+      allow create, update: if isAdminOrOwner(userId);
+      
+      // حذف: المدير فقط
+      allow delete: if isAdmin();
+    }
+    
+    // ====================
+    // Audit Logs Collection
+    // ====================
+    match /audit_logs/{logId} {
+      // قراءة: المدير فقط
+      allow read: if isAdmin();
+      
+      // إنشاء: النظام فقط (تلقائي)
+      allow create: if isAdmin();
+      
+      // منع التحديث والحذف للحفاظ على سلامة السجلات
+      allow update, delete: if false;
+    }
+    
+    // ====================
+    // Backup Collections
+    // ====================
+    match /backups/{backupId} {
+      // قراءة/كتابة: المدير الرئيسي فقط
+      allow read, write: if isAdmin() && 
+                            exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+                            get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
+    }
+    
+    // ====================
+    // Default Rule - منع الوصول لأي مجموعة غير محددة
+    // ====================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,131 @@
+// Firebase Security Rules - قواعد الأمان الشاملة
+// هذا الملف يحتوي على قواعد الأمان لـ Firebase Storage و Realtime Database
+
+// ====================
+// Firebase Storage Rules
+// ====================
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // مجلد الصور العامة (أيقونات، شعارات، إلخ)
+    match /public/{allPaths=**} {
+      allow read: if true; // قراءة عامة
+      allow write: if request.auth != null && 
+                      exists(/databases/(default)/documents/admins/$(request.auth.uid)); // كتابة للمدراء فقط
+    }
+    
+    // مجلد صور المنتجات
+    match /products/{productId}/{allPaths=**} {
+      allow read: if true; // قراءة عامة
+      allow write: if request.auth != null && 
+                      exists(/databases/(default)/documents/admins/$(request.auth.uid)) &&
+                      // التحقق من نوع الملف
+                      request.resource.contentType.matches('image/.*') &&
+                      // التحقق من حجم الملف (أقل من 5 ميجا)
+                      request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // مجلد صور المستخدمين
+    match /users/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+                      (request.auth.uid == userId || 
+                       exists(/databases/(default)/documents/admins/$(request.auth.uid))) &&
+                      request.resource.contentType.matches('image/.*') &&
+                      request.resource.size < 2 * 1024 * 1024; // 2 ميجا للصور الشخصية
+    }
+    
+    // مجلد مرفقات الدعم الفني
+    match /support/{ticketId}/{allPaths=**} {
+      allow read: if request.auth != null &&
+                     (request.auth.uid == resource.metadata.customMetadata.uploadedBy ||
+                      exists(/databases/(default)/documents/admins/$(request.auth.uid)));
+      
+      allow write: if request.auth != null &&
+                      // التحقق من أنواع الملفات المسموحة
+                      (request.resource.contentType.matches('image/.*') ||
+                       request.resource.contentType.matches('application/pdf') ||
+                       request.resource.contentType.matches('text/.*')) &&
+                      // حجم أقصى 10 ميجا
+                      request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // مجلد النسخ الاحتياطية
+    match /backups/{allPaths=**} {
+      allow read, write: if request.auth != null && 
+                            exists(/databases/(default)/documents/admins/$(request.auth.uid)) &&
+                            get(/databases/(default)/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
+    }
+    
+    // منع الوصول لأي مجلد آخر
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// ====================
+// Firebase Realtime Database Rules (إذا كنت تستخدمه)
+// ====================
+{
+  "rules": {
+    // قواعد المستخدمين
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid || root.child('admins').child(auth.uid).exists()",
+        ".write": "$uid === auth.uid || root.child('admins').child(auth.uid).exists()",
+        ".validate": "newData.hasChildren(['email', 'displayName'])"
+      }
+    },
+    
+    // قواعد المدراء
+    "admins": {
+      ".read": "root.child('admins').child(auth.uid).exists()",
+      ".write": "root.child('admins').child(auth.uid).exists() && root.child('admins').child(auth.uid).child('role').val() === 'super_admin'"
+    },
+    
+    // قواعد الإعدادات العامة
+    "settings": {
+      ".read": true,
+      ".write": "root.child('admins').child(auth.uid).exists()"
+    },
+    
+    // قواعد الإحصائيات المباشرة
+    "analytics": {
+      "visitors": {
+        ".read": "root.child('admins').child(auth.uid).exists()",
+        ".write": true
+      },
+      "page_views": {
+        ".read": "root.child('admins').child(auth.uid).exists()",
+        ".write": true
+      }
+    },
+    
+    // قواعد الإشعارات المباشرة
+    "notifications": {
+      "$uid": {
+        ".read": "$uid === auth.uid || root.child('admins').child(auth.uid).exists()",
+        ".write": "root.child('admins').child(auth.uid).exists()"
+      }
+    },
+    
+    // قواعد الدردشة المباشرة (إذا أردت إضافتها)
+    "chat": {
+      "$chatId": {
+        ".read": "auth != null && (data.child('participants').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
+        ".write": "auth != null && (data.child('participants').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
+        "messages": {
+          "$messageId": {
+            ".validate": "newData.hasChildren(['text', 'timestamp', 'sender']) && newData.child('sender').val() === auth.uid"
+          }
+        }
+      }
+    },
+    
+    // منع الوصول لأي عقدة أخرى
+    ".read": false,
+    ".write": false
+  }
+}

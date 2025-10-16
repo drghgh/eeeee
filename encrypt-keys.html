@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أداة تشفير مفاتيح Firebase</title>
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .encrypt-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .encrypt-title {
+            color: #2c5aa0;
+            margin-bottom: 1rem;
+            font-size: 1.8rem;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: right;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        
+        .form-group textarea {
+            min-height: 150px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        
+        .encrypt-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        
+        .encrypt-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .result-section {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-top: 2rem;
+            display: none;
+        }
+        
+        .result-title {
+            color: #28a745;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+        
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        
+        .security-tips {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="encrypt-container">
+        <h1 class="encrypt-title">🔐 أداة تشفير مفاتيح Firebase</h1>
+        
+        <div class="warning">
+            <strong>تحذير أمني:</strong> هذه الأداة لتشفير مفاتيح Firebase الحساسة. لا تشارك المفاتيح المشفرة مع أشخاص غير مخولين.
+        </div>
+        
+        <form id="encryptForm">
+            <div class="form-group">
+                <label>API Key:</label>
+                <input type="text" id="apiKey" placeholder="AIzaSy..." required>
+            </div>
+            
+            <div class="form-group">
+                <label>Auth Domain:</label>
+                <input type="text" id="authDomain" placeholder="your-project.firebaseapp.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Project ID:</label>
+                <input type="text" id="projectId" placeholder="your-project-id" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Storage Bucket:</label>
+                <input type="text" id="storageBucket" placeholder="your-project.appspot.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Messaging Sender ID:</label>
+                <input type="text" id="messagingSenderId" placeholder="123456789" required>
+            </div>
+            
+            <div class="form-group">
+                <label>App ID:</label>
+                <input type="text" id="appId" placeholder="1:123456789:web:..." required>
+            </div>
+            
+            <div class="form-group">
+                <label>Measurement ID (اختياري):</label>
+                <input type="text" id="measurementId" placeholder="G-...">
+            </div>
+            
+            <button type="submit" class="encrypt-btn">
+                🔒 تشفير المفاتيح
+            </button>
+        </form>
+        
+        <div id="resultSection" class="result-section">
+            <div class="result-title">✅ تم التشفير بنجاح!</div>
+            
+            <div class="form-group">
+                <label>المفاتيح المشفرة (انسخ هذا الكود):</label>
+                <textarea id="encryptedResult" readonly></textarea>
+                <button type="button" class="copy-btn" onclick="copyResult()">📋 نسخ النتيجة</button>
+            </div>
+            
+            <div class="form-group">
+                <label>كود JavaScript للاستخدام:</label>
+                <textarea id="jsCode" readonly></textarea>
+                <button type="button" class="copy-btn" onclick="copyJSCode()">📋 نسخ كود JavaScript</button>
+            </div>
+        </div>
+        
+        <div class="security-tips">
+            <h4>💡 نصائح أمنية:</h4>
+            <ul>
+                <li>احتفظ بنسخة احتياطية من المفاتيح الأصلية في مكان آمن</li>
+                <li>لا تشارك المفاتيح المشفرة في المستودعات العامة</li>
+                <li>استخدم متغيرات البيئة للمفاتيح الحساسة في الإنتاج</li>
+                <li>قم بتدوير المفاتيح بانتظام</li>
+                <li>راقب استخدام Firebase للكشف عن أي نشاط مشبوه</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="firebase-keys.js"></script>
+    <script>
+        document.getElementById('encryptForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // جمع البيانات من النموذج
+            const config = {
+                apiKey: document.getElementById('apiKey').value,
+                authDomain: document.getElementById('authDomain').value,
+                projectId: document.getElementById('projectId').value,
+                storageBucket: document.getElementById('storageBucket').value,
+                messagingSenderId: document.getElementById('messagingSenderId').value,
+                appId: document.getElementById('appId').value,
+                measurementId: document.getElementById('measurementId').value || undefined
+            };
+            
+            // إنشاء مدير التشفير
+            const keysManager = new FirebaseKeysManager();
+            
+            // تشفير المفاتيح
+            const encryptedConfig = keysManager.encryptFirebaseConfig(config);
+            
+            // عرض النتيجة
+            displayResult(encryptedConfig, config);
+        });
+        
+        function displayResult(encryptedConfig, originalConfig) {
+            const resultSection = document.getElementById('resultSection');
+            const encryptedResult = document.getElementById('encryptedResult');
+            const jsCode = document.getElementById('jsCode');
+            
+            // تنسيق المفاتيح المشفرة
+            const formattedEncrypted = JSON.stringify(encryptedConfig, null, 2);
+            encryptedResult.value = formattedEncrypted;
+            
+            // إنشاء كود JavaScript
+            const jsCodeText = `// المفاتيح المشفرة - استبدل هذا في firebase-keys.js
+const encryptedFirebaseConfig = ${formattedEncrypted};
+
+// للتحقق من صحة فك التشفير:
+console.log('المفاتيح الأصلية:', ${JSON.stringify(originalConfig, null, 2)});`;
+            
+            jsCode.value = jsCodeText;
+            
+            // إظهار النتيجة
+            resultSection.style.display = 'block';
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function copyResult() {
+            const encryptedResult = document.getElementById('encryptedResult');
+            encryptedResult.select();
+            document.execCommand('copy');
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ تم النسخ!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        }
+        
+        function copyJSCode() {
+            const jsCode = document.getElementById('jsCode');
+            jsCode.select();
+            document.execCommand('copy');
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ تم النسخ!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        }
+        
+        // ملء البيانات التجريبية
+        document.addEventListener('DOMContentLoaded', function() {
+            // يمكنك إزالة هذا في الإنتاج
+            document.getElementById('apiKey').value = 'AIzaSyCzQjVixn8D_3T9v1hfLqy7Q0dKn3B0nyw';
+            document.getElementById('authDomain').value = 'system-ef973.firebaseapp.com';
+            document.getElementById('projectId').value = 'system-ef973';
+            document.getElementById('storageBucket').value = 'system-ef973.firebasestorage.app';
+            document.getElementById('messagingSenderId').value = '947634219183';
+            document.getElementById('appId').value = '1:947634219183:web:2974735cfadd5411654c5a';
+            document.getElementById('measurementId').value = 'G-D22ERXVGG7';
+        });
+    </script>
+</body>
+</html>
